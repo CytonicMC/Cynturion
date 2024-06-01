@@ -24,6 +24,23 @@ public class RabbitMQMessager {
         this.plugin = plugin;
     }
 
+    /**
+     * Initializes the connection to the RabbitMQ server.
+     * <p>
+     * This function creates a new ConnectionFactory object and sets its host,
+     * password, username, and port based on the environment variables
+     * "RABBITMQ_HOST", "RABBITMQ_PASSWORD", "RABBITMQ_USERNAME", and "RABBITMQ_PORT".
+     * It then attempts to create a new connection using the ConnectionFactory
+     * and store it in the "connection" variable. If an IOException or
+     * TimeoutException is caught, a RuntimeException is thrown.
+     * <p>
+     * After successfully creating the connection, the function attempts to
+     * create a new channel using the connection and store it in the "channel"
+     * variable. If an IOException or TimeoutException is caught, a RuntimeException
+     * is thrown.
+     *
+     * @throws RuntimeException if there is an error creating the connection or channel
+     */
     public void initializeConnection() {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(System.getenv("RABBITMQ_HOST"));
@@ -43,6 +60,14 @@ public class RabbitMQMessager {
         }
     }
 
+    /**
+     * Initializes the necessary queues for the RabbitMQ messaging system.
+     * <p>
+     * This method declares two queues: SERVER_DECLARE_QUEUE and SHUTDOWN_QUEUE.
+     * If either queue declaration fails, a RuntimeException is thrown.
+     *
+     * @throws RuntimeException if there is an error declaring either queue
+     */
     public void initializeQueues() {
         try {
             channel.queueDeclare(SERVER_DECLARE_QUEUE, false, false, false, null);
@@ -56,6 +81,15 @@ public class RabbitMQMessager {
         }
     }
 
+    /**
+     * Consumes server declare messages from the RabbitMQ queue and registers the servers with the proxy server.
+     * The message format is "{server-name}|:|{server-ip}|:|{server-port}".
+     * If the server name is null or "null", a random name is generated.
+     * TODO: Fix the whole id thing
+     *
+     * @throws MalformedParametersException if the received message is malformed
+     * @throws RuntimeException             if there is an error registering the server
+     */
     public void consumeServerDeclareMessages() {
         DeliverCallback deliverCallback = (consumerTag, delivery) -> {
             //formatting: {server-name}|:|{server-ip}|:|{server-port}
