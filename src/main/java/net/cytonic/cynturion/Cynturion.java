@@ -6,10 +6,13 @@ import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.LoginEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
+import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
+import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.server.PingOptions;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
@@ -49,6 +52,8 @@ public class Cynturion {
         rabbitmq.initializeConnection();
         rabbitmq.initializeQueues();
         rabbitmq.consumeServerDeclareMessages();
+        rabbitmq.consumeServerShutdownMessages();
+        rabbitmq.consumePlayerKickMessages();
     }
 
     /**
@@ -81,6 +86,23 @@ public class Cynturion {
         event.setInitialServer(Iterables.getFirst(proxyServer.getAllServers(), null));
     }
 
+    @Subscribe
+    public void onServerConnect(ServerPreConnectEvent event) {
+        event.getOriginalServer().ping(PingOptions.DEFAULT).whenComplete((serverPing, throwable) -> {
+            if(throwable != null) {
+                logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName(), throwable);
+                return;
+            }
+
+            if (serverPing == null) {
+                logger.info("Server {} is not online, unregistering", event.getOriginalServer().getServerInfo().getName());
+                proxyServer.unregisterServer(event.getOriginalServer().getServerInfo());
+                rabbitmq.sendServerTimeoutMessage(event.getOriginalServer().getServerInfo());
+                redis.removeServer(event.getOriginalServer().getServerInfo());
+            }
+        });
+    }
+
     /**
      * Returns the proxy server.
      *
@@ -88,5 +110,11 @@ public class Cynturion {
      */
     public ProxyServer getProxy() {
         return proxyServer;
+    }
+
+    @Subscribe
+    public void onShutdown(ProxyShutdownEvent event) {
+        redis.shutdown();
+        rabbitmq.shutdown();
     }
 }

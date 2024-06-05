@@ -5,17 +5,23 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 import com.velocitypowered.api.proxy.server.ServerInfo;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.ComponentSerializer;
+import net.kyori.adventure.text.serializer.json.JSONComponentSerializer;
 
 import java.io.IOException;
 import java.lang.reflect.MalformedParametersException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 public class RabbitMQMessager {
     public static final String SERVER_DECLARE_QUEUE = "server-declaration";
     public static final String SHUTDOWN_QUEUE = "server-shutdown";
+    public static final String PLAYER_KICK_QUEUE = "player-kick";
+
     private final Cynturion plugin;
     private Connection connection;
     private Channel channel;
@@ -79,6 +85,11 @@ public class RabbitMQMessager {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        try {
+            channel.queueDeclare(PLAYER_KICK_QUEUE, false, false, false, null);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -115,6 +126,94 @@ public class RabbitMQMessager {
         };
         try {
             channel.basicConsume(SERVER_DECLARE_QUEUE, true, deliverCallback, consumerTag -> {
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void consumeServerShutdownMessages() {
+        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+            //formatting: {server-name}|:|{server-ip}|:|{server-port}
+            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            String[] parts = message.split("\\|:\\|");
+            if (parts.length != 3) throw new MalformedParametersException("The recived message is malformed.");
+            String name = parts[0];
+            if (name == null || name.equalsIgnoreCase("null"))
+                throw new MalformedParametersException("The recived message is malformed.");
+
+            String ip = parts[1];
+            String port = parts[2];
+            System.out.println("Unregistering the server: \"" + name + "\" with the ip and port " + ip + ":" + port);
+            try {
+                plugin.getProxy().unregisterServer(new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port))));
+            } catch (Exception ignored) {
+            }
+        };
+        try {
+            channel.basicConsume(SHUTDOWN_QUEUE, true, deliverCallback, consumerTag -> {
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+    /**
+     * Sends a message in RabbitMQ that a server has timed out.
+     * If the message cannot be sent, a RuntimeException is thrown.
+     *
+     * @throws RuntimeException if there is an error sending the message
+     */
+    public void sendServerTimeoutMessage(ServerInfo info) {
+        // formatting: {server-name}|:|{server-ip}|:|{server-port}
+        String serverdata = info.getName() + "|:|" + info.getAddress().getAddress().getHostAddress() + "|:|" + info.getAddress().getPort();
+        try {
+            channel.basicPublish("", SHUTDOWN_QUEUE, null, serverdata.getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Closes the connection to RabbitMQ and throws a RuntimeException if an IOException occurs.
+     *
+     * @throws RuntimeException if an IOException occurs while closing the connection
+     */
+    public void shutdown() {
+        try {
+            connection.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void consumePlayerKickMessages() {
+        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+            // FORMAT: {uuid}|:|{reason}|:|{name}|:|{message}|:|{rescuable}
+            String rawMessage = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            String[] parts = rawMessage.split("\\|:\\|");
+            if (parts.length != 5) throw new MalformedParametersException("The recived message is malformed.");
+
+            UUID uuid = UUID.fromString(parts[0]);
+            if (plugin.getProxy().getPlayer(uuid).isPresent()) {
+                String reason = parts[1];
+                String name = parts[2];
+                Component message = JSONComponentSerializer.json().deserialize(parts[3]);
+                boolean rescuable = Boolean.parseBoolean(parts[4]);
+
+                if (rescuable) {
+                    // todo: implement rescuing using backup lobby servers or something
+                    return;
+                }
+
+                plugin.getProxy().getPlayer(uuid).get().disconnect(message);
+
+                System.out.println("Kicking player: " + name + " with reason: " + reason);
+            }
+        };
+        try {
+            channel.basicConsume(PLAYER_KICK_QUEUE, true, deliverCallback, consumerTag -> {
             });
         } catch (IOException e) {
             throw new RuntimeException(e);
