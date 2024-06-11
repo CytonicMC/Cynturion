@@ -119,8 +119,9 @@ public class RabbitMQMessager {
             String ip = parts[1];
             String port = parts[2];
             System.out.println("Registering the server: \"" + name + "\" with the ip and port " + ip + ":" + port);
-            plugin.getProxy().registerServer(new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port))));
-
+            ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port)));
+            plugin.getRedis().addServer(info);
+            plugin.getProxy().registerServer(info);
         };
         try {
             channel.basicConsume(SERVER_DECLARE_QUEUE, true, deliverCallback, consumerTag -> {
@@ -144,7 +145,9 @@ public class RabbitMQMessager {
             String port = parts[2];
             System.out.println("Unregistering the server: \"" + name + "\" with the ip and port " + ip + ":" + port);
             try {
-                plugin.getProxy().unregisterServer(new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port))));
+                ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port)));
+                plugin.getRedis().removeServer(info);
+                plugin.getProxy().unregisterServer(info);
             } catch (Exception ignored) {
             }
         };

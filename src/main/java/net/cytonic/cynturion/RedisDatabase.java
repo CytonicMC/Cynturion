@@ -64,8 +64,19 @@ public class RedisDatabase {
             InetSocketAddress address = new InetSocketAddress(s.split("\\|:\\|")[1], Integer.parseInt(s.split("\\|:\\|")[2]));
             String name = s.split("\\|:\\|")[0];
             ServerInfo serverInfo = new ServerInfo(name, address);
+            System.out.println("Registering the server: " + name + " with the ip and port " + address.getAddress().getHostAddress() + ":" + address.getPort());
             plugin.getProxy().registerServer(serverInfo);
         });
+    }
+
+    /**
+     * Adds a server to the Redis database by constructing a server data string and adding it to the SERVER_STATUS_KEY set.
+     *
+     * @param info the ServerInfo object representing the server to be added
+     * **/
+    public void addServer(ServerInfo info) {
+        String serverdata = info.getName() + "|:|" + info.getAddress().getAddress().getHostAddress() + "|:|" + info.getAddress().getPort();
+        jedis.sadd(SERVER_STATUS_KEY, serverdata);
     }
 
     /**
