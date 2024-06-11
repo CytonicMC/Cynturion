@@ -6,9 +6,7 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.ComponentSerializer;
 import net.kyori.adventure.text.serializer.json.JSONComponentSerializer;
-
 import java.io.IOException;
 import java.lang.reflect.MalformedParametersException;
 import java.net.InetSocketAddress;
@@ -18,10 +16,10 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 public class RabbitMQMessager {
+
     public static final String SERVER_DECLARE_QUEUE = "server-declaration";
     public static final String SHUTDOWN_QUEUE = "server-shutdown";
     public static final String PLAYER_KICK_QUEUE = "player-kick";
-
     private final Cynturion plugin;
     private Connection connection;
     private Channel channel;
@@ -49,9 +47,9 @@ public class RabbitMQMessager {
      */
     public void initializeConnection() {
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(System.getenv("RABBITMQ_HOST"));
-        factory.setPassword(System.getenv("RABBITMQ_PASSWORD"));
-        factory.setUsername(System.getenv("RABBITMQ_USERNAME"));
+        factory.setHost(System.getProperty("RABBITMQ_HOST"));
+        factory.setPassword(System.getProperty("RABBITMQ_PASSWORD"));
+        factory.setUsername(System.getProperty("RABBITMQ_USERNAME"));
         factory.setPort(5672);
         try {
             connection = factory.newConnection();

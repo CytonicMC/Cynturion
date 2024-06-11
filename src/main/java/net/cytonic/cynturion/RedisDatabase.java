@@ -6,10 +6,10 @@ import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
-
 import java.net.InetSocketAddress;
 
 public class RedisDatabase {
+
     public static final String PLAYER_STATUS_CHANNEL = "player_status";
     public static final String ONLINE_PLAYER_NAME_KEY = "online_player_names";
     public static final String ONLINE_PLAYER_UUID_KEY = "online_player_uuids";
@@ -22,11 +22,11 @@ public class RedisDatabase {
      */
     public RedisDatabase(Cynturion plugin) {
         this.plugin = plugin;
-        HostAndPort hostAndPort = new HostAndPort(System.getenv("REDIS_HOST"), 6379);
-        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getenv("REDIS_PASSWORD")).socketTimeoutMillis(2000).build();
+        HostAndPort hostAndPort = new HostAndPort(System.getProperty("REDIS_HOST"), 6379);
+        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getProperty("REDIS_PASSWORD")).socketTimeoutMillis(2000).build();
         this.jedis = new Jedis(hostAndPort, config);
-//        this.jedis = new Jedis(System.getenv("REDIS_HOST"), Integer.parseInt(System.getenv("REDIS_PORT")));
-        this.jedis.auth(System.getenv("REDIS_PASSWORD"));
+//        this.jedis = new Jedis(System.getProperty("REDIS_HOST"), Integer.parseInt(System.getProperty("REDIS_PORT")));
+        this.jedis.auth(System.getProperty("REDIS_PASSWORD"));
     }
 
 
