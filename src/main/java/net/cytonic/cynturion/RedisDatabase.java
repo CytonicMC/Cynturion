@@ -2,18 +2,19 @@ package net.cytonic.cynturion;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
-import redis.clients.jedis.DefaultJedisClientConfig;
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisClientConfig;
+import redis.clients.jedis.*;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class RedisDatabase {
+public class RedisDatabase extends JedisPubSub {
 
     public static final String PLAYER_STATUS_CHANNEL = "player_status";
     public static final String ONLINE_PLAYER_NAME_KEY = "online_player_names";
     public static final String ONLINE_PLAYER_UUID_KEY = "online_player_uuids";
     public static final String SERVER_STATUS_KEY = "server_status";
+    public static final String SERVER_STATUS_CHANNEL = "server_status_channel";
+    private final ExecutorService worker = Executors.newCachedThreadPool();
     private final Jedis jedis;
     private final Cynturion plugin;
 
@@ -27,6 +28,27 @@ public class RedisDatabase {
         this.jedis = new Jedis(hostAndPort, config);
 //        this.jedis = new Jedis(System.getProperty("REDIS_HOST"), Integer.parseInt(System.getProperty("REDIS_PORT")));
         this.jedis.auth(System.getProperty("REDIS_PASSWORD"));
+        worker.submit(() -> jedis.subscribe(this,SERVER_STATUS_CHANNEL));
+    }
+
+    @Override
+    public void onMessage(String channel, String message) {
+        if (channel.equals(SERVER_STATUS_CHANNEL)) {
+            String[] parts = message.split("\\|:\\|");
+            String name = parts[0];
+            String ip = parts[1];
+            int port = Integer.parseInt(parts[2]);
+            ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, port));
+            if (parts[3].equalsIgnoreCase("START")) {
+                System.out.println("Registering the server: " + name + " with the ip and port " + ip + ":" + port);
+                plugin.getProxy().registerServer(info);
+                addServer(info);
+            }else if (parts[3].equalsIgnoreCase("SHUTDOWN")) {
+                System.out.println("Unregistering the server: " + name + " with the ip and port " + ip + ":" + port);
+                plugin.getProxy().unregisterServer(info);
+                removeServer(info);
+            }
+        }
     }
 
 

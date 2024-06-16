@@ -104,7 +104,7 @@ public class RabbitMQMessager {
             //formatting: {server-name}|:|{server-ip}|:|{server-port}
             String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
             String[] parts = message.split("\\|:\\|");
-            if (parts.length != 3) throw new MalformedParametersException("The recived message is malformed.");
+            if (parts.length != 3) throw new MalformedParametersException("The received message is malformed.");
             String name = parts[0];
             if (name == null || name.equalsIgnoreCase("null")) {
                 Random random = new Random();
@@ -136,10 +136,10 @@ public class RabbitMQMessager {
             //formatting: {server-name}|:|{server-ip}|:|{server-port}
             String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
             String[] parts = message.split("\\|:\\|");
-            if (parts.length != 3) throw new MalformedParametersException("The recived message is malformed.");
+            if (parts.length != 3) throw new MalformedParametersException("The received message is malformed.");
             String name = parts[0];
             if (name == null || name.equalsIgnoreCase("null"))
-                throw new MalformedParametersException("The recived message is malformed.");
+                throw new MalformedParametersException("The received message is malformed.");
 
             String ip = parts[1];
             String port = parts[2];
