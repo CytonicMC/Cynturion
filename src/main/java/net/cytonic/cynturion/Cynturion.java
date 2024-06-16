@@ -16,8 +16,6 @@ import com.velocitypowered.api.proxy.server.PingOptions;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 @Plugin(
         id = "cynturion",
