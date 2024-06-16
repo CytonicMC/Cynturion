@@ -18,9 +18,7 @@ public class ServerStatus extends JedisPubSub {
 
     @Override
     public void onMessage(String channel, String message) {
-        System.err.println("onMessage: " + channel + " " + message);
         if (channel.equals(RedisDatabase.SERVER_STATUS_CHANNEL)) {
-            //                   START|:|Cytosis-q2268d|:|192.168.4.64|:|25565
             // formatting: <START/STOP>|:|<SERVER_ID>|:|<SERVER_IP>|:|<SERVER_PORT>
 
             String[] parts = message.split("\\|:\\|");

@@ -82,6 +82,15 @@ public class RedisDatabase extends JedisPubSub {
     }
 
     /**
+     * Sends a fake message pretenting to be the server that stopped, since it stopped responding.
+     * @param info the server to remove
+     */
+    public void sendUnregisterServerMessage(ServerInfo info) {
+        // formatting: <START/STOP>|:|<SERVER_ID>|:|<SERVER_IP>|:|<SERVER_PORT>
+        jedisPub.publish(SERVER_STATUS_CHANNEL, "STOP|:|" + info.getName() + "|:|" + info.getAddress().getAddress().getHostAddress() + "|:|" + info.getAddress().getPort());
+    }
+
+    /**
      * Loads the servers from the SERVER_STATUS_CHANNEL and registers them with the proxy server.
      * The servers are expected to be in the format "{server-name}|:|{server-ip}|:|{server-port}".
      */

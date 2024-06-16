@@ -93,7 +93,8 @@ public class Cynturion {
                     logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName());
                     logger.warn("Unregistering server {}", event.getOriginalServer().getServerInfo().getName());
                     getProxy().unregisterServer(event.getOriginalServer().getServerInfo());
-                    //todo: unregister server on all proxies
+                    getRedis().removeServer(event.getOriginalServer().getServerInfo());
+                    getRedis().sendUnregisterServerMessage(event.getOriginalServer().getServerInfo());
                     return;
                 }
 
