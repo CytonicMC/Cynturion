@@ -16,6 +16,8 @@ import com.velocitypowered.api.proxy.server.PingOptions;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 @Plugin(
         id = "cynturion",
@@ -88,19 +90,22 @@ public class Cynturion {
 
     @Subscribe
     public void onServerConnect(ServerPreConnectEvent event) {
-        event.getOriginalServer().ping(PingOptions.DEFAULT).whenComplete((serverPing, throwable) -> {
-            if(throwable != null) {
-                logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName(), throwable);
-                return;
-            }
+            event.getOriginalServer().ping(PingOptions.DEFAULT).whenComplete((serverPing, throwable) -> {
+                if (throwable != null) {
+                    logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName());
+                    logger.warn("Unregistering server {}", event.getOriginalServer().getServerInfo().getName());
+                    getProxy().unregisterServer(event.getOriginalServer().getServerInfo());
+                    //todo: unregister server on all proxies
+                    return;
+                }
 
-            if (serverPing == null) {
-                logger.info("Server {} is not online, unregistering", event.getOriginalServer().getServerInfo().getName());
-                proxyServer.unregisterServer(event.getOriginalServer().getServerInfo());
-                rabbitmq.sendServerTimeoutMessage(event.getOriginalServer().getServerInfo());
-                redis.removeServer(event.getOriginalServer().getServerInfo());
-            }
-        });
+                if (serverPing == null) {
+                    logger.info("Server {} is not online, unregistering", event.getOriginalServer().getServerInfo().getName());
+                    proxyServer.unregisterServer(event.getOriginalServer().getServerInfo());
+                    rabbitmq.sendServerTimeoutMessage(event.getOriginalServer().getServerInfo());
+                    redis.removeServer(event.getOriginalServer().getServerInfo());
+                }
+            });
     }
 
     /**
