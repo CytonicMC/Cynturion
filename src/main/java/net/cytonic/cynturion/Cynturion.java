@@ -56,7 +56,6 @@ public class Cynturion {
         rabbitmq.consumeServerDeclareMessages();
         rabbitmq.consumeServerShutdownMessages();
         rabbitmq.consumePlayerKickMessages();
-        Executors.newCachedThreadPool();
     }
 
     /**

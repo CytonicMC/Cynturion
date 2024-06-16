@@ -15,7 +15,7 @@ public class RedisDatabase extends JedisPubSub {
     public static final String SERVER_STATUS_KEY = "server_status";
     public static final String SERVER_STATUS_CHANNEL = "server_status_channel";
     private final ExecutorService worker = Executors.newCachedThreadPool();
-    private final Jedis jedis;
+    private final JedisPooled jedis;
     private final Cynturion plugin;
 
     /**
@@ -24,11 +24,9 @@ public class RedisDatabase extends JedisPubSub {
     public RedisDatabase(Cynturion plugin) {
         this.plugin = plugin;
         HostAndPort hostAndPort = new HostAndPort(System.getProperty("REDIS_HOST"), 6379);
-        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getProperty("REDIS_PASSWORD")).socketTimeoutMillis(2000).build();
-        this.jedis = new Jedis(hostAndPort, config);
-//        this.jedis = new Jedis(System.getProperty("REDIS_HOST"), Integer.parseInt(System.getProperty("REDIS_PORT")));
-        this.jedis.auth(System.getProperty("REDIS_PASSWORD"));
-        worker.submit(() -> jedis.subscribe(this,SERVER_STATUS_CHANNEL));
+        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getProperty("REDIS_PASSWORD")).build();
+        this.jedis = new JedisPooled(hostAndPort, config);
+        worker.submit(() -> jedis.subscribe(this, SERVER_STATUS_CHANNEL));
     }
 
     @Override
@@ -81,13 +79,15 @@ public class RedisDatabase extends JedisPubSub {
      * The servers are expected to be in the format "{server-name}|:|{server-ip}|:|{server-port}".
      */
     public void loadServers() {
-        // formatting: {server-name}|:|{server-ip}|:|{server-port}
-        jedis.smembers(SERVER_STATUS_KEY).forEach(s -> {
-            InetSocketAddress address = new InetSocketAddress(s.split("\\|:\\|")[1], Integer.parseInt(s.split("\\|:\\|")[2]));
-            String name = s.split("\\|:\\|")[0];
-            ServerInfo serverInfo = new ServerInfo(name, address);
-            System.out.println("Registering the server: " + name + " with the ip and port " + address.getAddress().getHostAddress() + ":" + address.getPort());
-            plugin.getProxy().registerServer(serverInfo);
+        worker.submit(() -> {
+            // formatting: {server-name}|:|{server-ip}|:|{server-port}
+            jedis.smembers(SERVER_STATUS_KEY).forEach(s -> {
+                InetSocketAddress address = new InetSocketAddress(s.split("\\|:\\|")[1], Integer.parseInt(s.split("\\|:\\|")[2]));
+                String name = s.split("\\|:\\|")[0];
+                ServerInfo serverInfo = new ServerInfo(name, address);
+                System.out.println("Registering the server: " + name + " with the ip and port " + address.getAddress().getHostAddress() + ":" + address.getPort());
+                plugin.getProxy().registerServer(serverInfo);
+            });
         });
     }
 
