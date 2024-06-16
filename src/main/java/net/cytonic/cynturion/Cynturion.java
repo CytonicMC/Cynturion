@@ -112,6 +112,14 @@ public class Cynturion {
         return proxyServer;
     }
 
+    public RedisDatabase getRedis() {
+        return redis;
+    }
+
+    public RabbitMQMessager getRabbitMQ() {
+        return rabbitmq;
+    }
+
     @Subscribe
     public void onShutdown(ProxyShutdownEvent event) {
         redis.shutdown();

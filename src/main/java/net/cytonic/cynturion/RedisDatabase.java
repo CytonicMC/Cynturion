@@ -2,18 +2,19 @@ package net.cytonic.cynturion;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
-import redis.clients.jedis.DefaultJedisClientConfig;
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisClientConfig;
-
+import redis.clients.jedis.*;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class RedisDatabase {
+public class RedisDatabase extends JedisPubSub {
+
     public static final String PLAYER_STATUS_CHANNEL = "player_status";
     public static final String ONLINE_PLAYER_NAME_KEY = "online_player_names";
     public static final String ONLINE_PLAYER_UUID_KEY = "online_player_uuids";
     public static final String SERVER_STATUS_KEY = "server_status";
+    public static final String SERVER_STATUS_CHANNEL = "server_status_channel";
+    private final ExecutorService worker = Executors.newCachedThreadPool();
     private final Jedis jedis;
     private final Cynturion plugin;
 
@@ -22,11 +23,32 @@ public class RedisDatabase {
      */
     public RedisDatabase(Cynturion plugin) {
         this.plugin = plugin;
-        HostAndPort hostAndPort = new HostAndPort(System.getenv("REDIS_HOST"), 6379);
-        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getenv("REDIS_PASSWORD")).socketTimeoutMillis(2000).build();
+        HostAndPort hostAndPort = new HostAndPort(System.getProperty("REDIS_HOST"), 6379);
+        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getProperty("REDIS_PASSWORD")).socketTimeoutMillis(2000).build();
         this.jedis = new Jedis(hostAndPort, config);
-//        this.jedis = new Jedis(System.getenv("REDIS_HOST"), Integer.parseInt(System.getenv("REDIS_PORT")));
-        this.jedis.auth(System.getenv("REDIS_PASSWORD"));
+//        this.jedis = new Jedis(System.getProperty("REDIS_HOST"), Integer.parseInt(System.getProperty("REDIS_PORT")));
+        this.jedis.auth(System.getProperty("REDIS_PASSWORD"));
+        worker.submit(() -> jedis.subscribe(this,SERVER_STATUS_CHANNEL));
+    }
+
+    @Override
+    public void onMessage(String channel, String message) {
+        if (channel.equals(SERVER_STATUS_CHANNEL)) {
+            String[] parts = message.split("\\|:\\|");
+            String name = parts[0];
+            String ip = parts[1];
+            int port = Integer.parseInt(parts[2]);
+            ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, port));
+            if (parts[3].equalsIgnoreCase("START")) {
+                System.out.println("Registering the server: " + name + " with the ip and port " + ip + ":" + port);
+                plugin.getProxy().registerServer(info);
+                addServer(info);
+            }else if (parts[3].equalsIgnoreCase("SHUTDOWN")) {
+                System.out.println("Unregistering the server: " + name + " with the ip and port " + ip + ":" + port);
+                plugin.getProxy().unregisterServer(info);
+                removeServer(info);
+            }
+        }
     }
 
 
@@ -64,8 +86,19 @@ public class RedisDatabase {
             InetSocketAddress address = new InetSocketAddress(s.split("\\|:\\|")[1], Integer.parseInt(s.split("\\|:\\|")[2]));
             String name = s.split("\\|:\\|")[0];
             ServerInfo serverInfo = new ServerInfo(name, address);
+            System.out.println("Registering the server: " + name + " with the ip and port " + address.getAddress().getHostAddress() + ":" + address.getPort());
             plugin.getProxy().registerServer(serverInfo);
         });
+    }
+
+    /**
+     * Adds a server to the Redis database by constructing a server data string and adding it to the SERVER_STATUS_KEY set.
+     *
+     * @param info the ServerInfo object representing the server to be added
+     * **/
+    public void addServer(ServerInfo info) {
+        String serverdata = info.getName() + "|:|" + info.getAddress().getAddress().getHostAddress() + "|:|" + info.getAddress().getPort();
+        jedis.sadd(SERVER_STATUS_KEY, serverdata);
     }
 
     /**
