@@ -6,9 +6,7 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.ComponentSerializer;
 import net.kyori.adventure.text.serializer.json.JSONComponentSerializer;
-
 import java.io.IOException;
 import java.lang.reflect.MalformedParametersException;
 import java.net.InetSocketAddress;
@@ -18,10 +16,10 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 public class RabbitMQMessager {
+
     public static final String SERVER_DECLARE_QUEUE = "server-declaration";
     public static final String SHUTDOWN_QUEUE = "server-shutdown";
     public static final String PLAYER_KICK_QUEUE = "player-kick";
-
     private final Cynturion plugin;
     private Connection connection;
     private Channel channel;
@@ -49,9 +47,9 @@ public class RabbitMQMessager {
      */
     public void initializeConnection() {
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(System.getenv("RABBITMQ_HOST"));
-        factory.setPassword(System.getenv("RABBITMQ_PASSWORD"));
-        factory.setUsername(System.getenv("RABBITMQ_USERNAME"));
+        factory.setHost(System.getProperty("RABBITMQ_HOST"));
+        factory.setPassword(System.getProperty("RABBITMQ_PASSWORD"));
+        factory.setUsername(System.getProperty("RABBITMQ_USERNAME"));
         factory.setPort(5672);
         try {
             connection = factory.newConnection();
@@ -106,7 +104,7 @@ public class RabbitMQMessager {
             //formatting: {server-name}|:|{server-ip}|:|{server-port}
             String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
             String[] parts = message.split("\\|:\\|");
-            if (parts.length != 3) throw new MalformedParametersException("The recived message is malformed.");
+            if (parts.length != 3) throw new MalformedParametersException("The received message is malformed.");
             String name = parts[0];
             if (name == null || name.equalsIgnoreCase("null")) {
                 Random random = new Random();
@@ -121,8 +119,9 @@ public class RabbitMQMessager {
             String ip = parts[1];
             String port = parts[2];
             System.out.println("Registering the server: \"" + name + "\" with the ip and port " + ip + ":" + port);
-            plugin.getProxy().registerServer(new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port))));
-
+            ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port)));
+            plugin.getRedis().addServer(info);
+            plugin.getProxy().registerServer(info);
         };
         try {
             channel.basicConsume(SERVER_DECLARE_QUEUE, true, deliverCallback, consumerTag -> {
@@ -137,16 +136,18 @@ public class RabbitMQMessager {
             //formatting: {server-name}|:|{server-ip}|:|{server-port}
             String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
             String[] parts = message.split("\\|:\\|");
-            if (parts.length != 3) throw new MalformedParametersException("The recived message is malformed.");
+            if (parts.length != 3) throw new MalformedParametersException("The received message is malformed.");
             String name = parts[0];
             if (name == null || name.equalsIgnoreCase("null"))
-                throw new MalformedParametersException("The recived message is malformed.");
+                throw new MalformedParametersException("The received message is malformed.");
 
             String ip = parts[1];
             String port = parts[2];
             System.out.println("Unregistering the server: \"" + name + "\" with the ip and port " + ip + ":" + port);
             try {
-                plugin.getProxy().unregisterServer(new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port))));
+                ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, Integer.parseInt(port)));
+                plugin.getRedis().removeServer(info);
+                plugin.getProxy().unregisterServer(info);
             } catch (Exception ignored) {
             }
         };

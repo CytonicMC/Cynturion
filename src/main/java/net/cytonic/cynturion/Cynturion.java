@@ -88,19 +88,23 @@ public class Cynturion {
 
     @Subscribe
     public void onServerConnect(ServerPreConnectEvent event) {
-        event.getOriginalServer().ping(PingOptions.DEFAULT).whenComplete((serverPing, throwable) -> {
-            if(throwable != null) {
-                logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName(), throwable);
-                return;
-            }
+            event.getOriginalServer().ping(PingOptions.DEFAULT).whenComplete((serverPing, throwable) -> {
+                if (throwable != null) {
+                    logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName());
+                    logger.warn("Unregistering server {}", event.getOriginalServer().getServerInfo().getName());
+                    getProxy().unregisterServer(event.getOriginalServer().getServerInfo());
+                    getRedis().removeServer(event.getOriginalServer().getServerInfo());
+                    getRedis().sendUnregisterServerMessage(event.getOriginalServer().getServerInfo());
+                    return;
+                }
 
-            if (serverPing == null) {
-                logger.info("Server {} is not online, unregistering", event.getOriginalServer().getServerInfo().getName());
-                proxyServer.unregisterServer(event.getOriginalServer().getServerInfo());
-                rabbitmq.sendServerTimeoutMessage(event.getOriginalServer().getServerInfo());
-                redis.removeServer(event.getOriginalServer().getServerInfo());
-            }
-        });
+                if (serverPing == null) {
+                    logger.info("Server {} is not online, unregistering", event.getOriginalServer().getServerInfo().getName());
+                    proxyServer.unregisterServer(event.getOriginalServer().getServerInfo());
+                    rabbitmq.sendServerTimeoutMessage(event.getOriginalServer().getServerInfo());
+                    redis.removeServer(event.getOriginalServer().getServerInfo());
+                }
+            });
     }
 
     /**
@@ -110,6 +114,14 @@ public class Cynturion {
      */
     public ProxyServer getProxy() {
         return proxyServer;
+    }
+
+    public RedisDatabase getRedis() {
+        return redis;
+    }
+
+    public RabbitMQMessager getRabbitMQ() {
+        return rabbitmq;
     }
 
     @Subscribe

@@ -2,19 +2,45 @@ package net.cytonic.cynturion;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
-import redis.clients.jedis.DefaultJedisClientConfig;
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisClientConfig;
-
+import net.cytonic.cynturion.data.obj.CytonicServer;
+import net.cytonic.cynturion.messaging.pubsub.ServerStatus;
+import redis.clients.jedis.*;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class RedisDatabase {
-    public static final String PLAYER_STATUS_CHANNEL = "player_status";
+public class RedisDatabase extends JedisPubSub {
+
+    /**
+     * Cached player names
+     */
     public static final String ONLINE_PLAYER_NAME_KEY = "online_player_names";
+    /**
+     * Cached player UUIDs
+     */
     public static final String ONLINE_PLAYER_UUID_KEY = "online_player_uuids";
-    public static final String SERVER_STATUS_KEY = "server_status";
-    private final Jedis jedis;
+    /**
+     * Cached Servers
+     */
+    public static final String ONLINE_SERVER_KEY = "online_servers";
+
+    /**
+     * Player login/out channel
+     */
+    public static final String PLAYER_STATUS_CHANNEL = "player_status";
+    /**
+     * Server startup / shutdown
+     */
+    public static final String SERVER_STATUS_CHANNEL = "server_status";
+    
+    
+    private final ExecutorService worker = Executors.newCachedThreadPool();
+    // cache client
+    private final JedisPooled jedis;
+    // publish client
+    private final JedisPooled jedisPub;
+    // subscribe client
+    private final JedisPooled jedisSub;
     private final Cynturion plugin;
 
     /**
@@ -22,13 +48,14 @@ public class RedisDatabase {
      */
     public RedisDatabase(Cynturion plugin) {
         this.plugin = plugin;
-        HostAndPort hostAndPort = new HostAndPort(System.getenv("REDIS_HOST"), 6379);
-        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getenv("REDIS_PASSWORD")).socketTimeoutMillis(2000).build();
-        this.jedis = new Jedis(hostAndPort, config);
-//        this.jedis = new Jedis(System.getenv("REDIS_HOST"), Integer.parseInt(System.getenv("REDIS_PORT")));
-        this.jedis.auth(System.getenv("REDIS_PASSWORD"));
+        HostAndPort hostAndPort = new HostAndPort(System.getProperty("REDIS_HOST"), 6379);
+        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getProperty("REDIS_PASSWORD")).build();
+        this.jedis = new JedisPooled(hostAndPort, config);
+        this.jedisPub = new JedisPooled(hostAndPort, config);
+        this.jedisSub = new JedisPooled(hostAndPort, config);
+        
+        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL));
     }
-
 
     /**
      * Sends a message in redis that the specified player joined
@@ -37,7 +64,7 @@ public class RedisDatabase {
      */
     public void sendLoginMessage(Player player) {
         // <PLAYER_NAME>|:|<PLAYER_UUID>|:|<JOIN/LEAVE>
-        jedis.publish(PLAYER_STATUS_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|JOIN");
+        jedisPub.publish(PLAYER_STATUS_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|JOIN");
         jedis.sadd(ONLINE_PLAYER_NAME_KEY, player.getUsername());
         jedis.sadd(ONLINE_PLAYER_UUID_KEY, player.getUniqueId().toString());
     }
@@ -49,9 +76,18 @@ public class RedisDatabase {
      */
     public void sendLogoutMessage(Player player) {
         // <PLAYER_NAME>|:|<PLAYER_UUID>|:|<JOIN/LEAVE>
-        jedis.publish(PLAYER_STATUS_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|LEAVE");
+        jedisPub.publish(PLAYER_STATUS_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|LEAVE");
         jedis.srem(ONLINE_PLAYER_NAME_KEY, player.getUsername());
         jedis.srem(ONLINE_PLAYER_UUID_KEY, player.getUniqueId().toString());
+    }
+
+    /**
+     * Sends a fake message pretenting to be the server that stopped, since it stopped responding.
+     * @param info the server to remove
+     */
+    public void sendUnregisterServerMessage(ServerInfo info) {
+        // formatting: <START/STOP>|:|<SERVER_ID>|:|<SERVER_IP>|:|<SERVER_PORT>
+        jedisPub.publish(SERVER_STATUS_CHANNEL, "STOP|:|" + info.getName() + "|:|" + info.getAddress().getAddress().getHostAddress() + "|:|" + info.getAddress().getPort());
     }
 
     /**
@@ -59,23 +95,29 @@ public class RedisDatabase {
      * The servers are expected to be in the format "{server-name}|:|{server-ip}|:|{server-port}".
      */
     public void loadServers() {
-        // formatting: {server-name}|:|{server-ip}|:|{server-port}
-        jedis.smembers(SERVER_STATUS_KEY).forEach(s -> {
-            InetSocketAddress address = new InetSocketAddress(s.split("\\|:\\|")[1], Integer.parseInt(s.split("\\|:\\|")[2]));
-            String name = s.split("\\|:\\|")[0];
-            ServerInfo serverInfo = new ServerInfo(name, address);
-            plugin.getProxy().registerServer(serverInfo);
-        });
+        worker.submit(() -> jedis.smembers(ONLINE_SERVER_KEY).forEach(s -> {
+            CytonicServer server = CytonicServer.deserialize(s);
+            System.out.println("Registering the server: " + server.id() + " with the ip and port " + server.ip() + ":" + server.port());
+            plugin.getProxy().registerServer(new ServerInfo(server.id(), new InetSocketAddress(server.ip(), server.port())));
+        }));
     }
 
     /**
-     * Removes a server from the Redis database by constructing a server data string and removing it from the SERVER_STATUS_KEY set.
+     * Adds a server to the Redis database by constructing a server data string and adding it to the ONLINE_SERVER_KEY set.
+     *
+     * @param info the ServerInfo object representing the server to be added
+     * **/
+    public void addServer(ServerInfo info) {
+        jedis.sadd(ONLINE_SERVER_KEY, new CytonicServer(info.getAddress().getAddress().getHostAddress(), info.getName(), info.getAddress().getPort()).serialize());
+    }
+
+    /**
+     * Removes a server from the Redis database by constructing a server data string and removing it from the ONLINE_SERVER_KEY set.
      *
      * @param info the ServerInfo object representing the server to be removed
      */
     public void removeServer(ServerInfo info) {
-        String serverdata = info.getName() + "|:|" + info.getAddress().getAddress().getHostAddress() + "|:|" + info.getAddress().getPort();
-        jedis.srem(SERVER_STATUS_KEY, serverdata);
+        jedis.srem(ONLINE_SERVER_KEY, new CytonicServer(info.getAddress().getAddress().getHostAddress(), info.getName(), info.getAddress().getPort()).serialize());
     }
 
     /**
