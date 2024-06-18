@@ -30,6 +30,7 @@ jobs:
 
       - name: Create Forwarding Secret
         run: |
+            ls
             touch docker/config/forwarding.secret
             echo ${{secrets.VELOCITY_FORWARDING}} > docker/config/forwarding.secret
 
