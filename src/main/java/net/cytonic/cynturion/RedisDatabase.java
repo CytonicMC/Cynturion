@@ -3,7 +3,7 @@ package net.cytonic.cynturion;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import net.cytonic.cynturion.data.obj.CytonicServer;
-import net.cytonic.cynturion.messaging.pubsub.ServerStatus;
+import net.cytonic.cynturion.messaging.pubsub.*;
 import redis.clients.jedis.*;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
@@ -32,6 +32,10 @@ public class RedisDatabase extends JedisPubSub {
      * Server startup / shutdown
      */
     public static final String SERVER_STATUS_CHANNEL = "server_status";
+    /**
+     * Player send channel
+     */
+    public static final String PLAYER_SEND_CHANNEL = "player_send";
     
     
     private final ExecutorService worker = Executors.newCachedThreadPool();
@@ -55,6 +59,7 @@ public class RedisDatabase extends JedisPubSub {
         this.jedisSub = new JedisPooled(hostAndPort, config);
         
         worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL));
+        worker.submit(() -> jedisSub.subscribe(new PlayerSend(plugin, this), PLAYER_SEND_CHANNEL));
     }
 
     /**
@@ -82,7 +87,7 @@ public class RedisDatabase extends JedisPubSub {
     }
 
     /**
-     * Sends a fake message pretenting to be the server that stopped, since it stopped responding.
+     * Sends a fake message pretending to be the server that stopped, since it stopped responding.
      * @param info the server to remove
      */
     public void sendUnregisterServerMessage(ServerInfo info) {
