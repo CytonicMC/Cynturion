@@ -1,0 +1,35 @@
+config-version = "2.6"
+bind = "0.0.0.0:25577"
+motd = "<gold>CytonicMC Alpha test server</gold>"
+show-max-players = 500
+online-mode = true
+force-key-authentication = true
+prevent-client-proxy-connections = false
+player-info-forwarding-mode = "MODERN"
+forwarding-secret-file = "forwarding.secret"
+announce-forge = false
+kick-existing-players = true
+ping-passthrough = "DISABLED"
+enable-player-address-logging = true
+[servers]
+try = []
+[forced-hosts]
+[advanced]
+compression-threshold = 256
+compression-level = -1
+login-ratelimit = 500
+connection-timeout = 5000
+read-timeout = 30000
+haproxy-protocol = false
+tcp-fast-open = false
+bungee-plugin-message-channel = true
+show-ping-requests = false
+failover-on-unexpected-server-disconnect = true
+announce-proxy-commands = true
+log-command-executions = false
+log-player-connections = true
+[query]
+enabled = false
+port = 25577
+map = "Velocity"
+show-plugins = false
