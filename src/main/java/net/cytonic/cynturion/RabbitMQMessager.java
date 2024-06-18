@@ -47,9 +47,9 @@ public class RabbitMQMessager {
      */
     public void initializeConnection() {
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(System.getProperty("RABBITMQ_HOST"));
-        factory.setPassword(System.getProperty("RABBITMQ_PASSWORD"));
-        factory.setUsername(System.getProperty("RABBITMQ_USERNAME"));
+        factory.setHost(CynturionSettings.RABBITMQ_HOST);
+        factory.setPassword(CynturionSettings.RABBITMQ_PASSWORD);
+        factory.setUsername(CynturionSettings.RABBITMQ_USERNAME);
         factory.setPort(5672);
         try {
             connection = factory.newConnection();
