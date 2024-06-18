@@ -52,8 +52,8 @@ public class RedisDatabase extends JedisPubSub {
      */
     public RedisDatabase(Cynturion plugin) {
         this.plugin = plugin;
-        HostAndPort hostAndPort = new HostAndPort(System.getProperty("REDIS_HOST"), 6379);
-        JedisClientConfig config = DefaultJedisClientConfig.builder().password(System.getProperty("REDIS_PASSWORD")).build();
+        HostAndPort hostAndPort = new HostAndPort(CynturionSettings.REDIS_HOST, 6379);
+        JedisClientConfig config = DefaultJedisClientConfig.builder().password(CynturionSettings.REDIS_PASSWORD).build();
         this.jedis = new JedisPooled(hostAndPort, config);
         this.jedisPub = new JedisPooled(hostAndPort, config);
         this.jedisSub = new JedisPooled(hostAndPort, config);

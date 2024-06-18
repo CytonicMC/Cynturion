@@ -46,6 +46,8 @@ public class Cynturion {
      */
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
+        CynturionSettings.importFromProperties();
+        CynturionSettings.importFromEnv();
         redis = new RedisDatabase(this);
         rabbitmq = new RabbitMQMessager(this);
         redis.loadServers();
