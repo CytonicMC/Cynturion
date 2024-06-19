@@ -33,7 +33,11 @@ tasks {
     }
     shadowJar {
         archiveFileName.set('Cynturion.jar')
-//        destinationDirectory.set(file(providers.gradleProperty("velocity_dir").get()))
+        destinationDirectory.set(
+                file(
+                        providers.gradleProperty("velocity_dir").orElse(destinationDirectory.get().toString())
+                )
+        )
 //        relocate("redis.clients", "net.cytonic.cynturion.libs")
         relocate("com.rabbitmq", "net.cytonic.cynturion.libs")
     }
