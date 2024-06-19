@@ -5,6 +5,7 @@ import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.LoginEvent;
+import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
@@ -13,9 +14,11 @@ import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.PingOptions;
+import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
+import java.util.Collections;
 
 @Plugin(
         id = "cynturion",
@@ -76,6 +79,16 @@ public class Cynturion {
     @Subscribe
     public void onPlayerLeave(DisconnectEvent event) {
         redis.sendLogoutMessage(event.getPlayer());
+    }
+
+    /**
+     * Subscribes to the KickedFromServerEvent and attempts to rescue the player.
+     *
+     * @param event the KickedFromServerEvent triggered when a player is kicked from the server
+     */
+    //todo: Make a dedicated list of fallbacks
+    public void onKick(KickedFromServerEvent event) {
+        event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("Whoops! You were kicked from the server, but I rescued you! :)")));
     }
 
     /**
