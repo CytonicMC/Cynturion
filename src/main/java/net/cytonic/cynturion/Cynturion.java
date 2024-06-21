@@ -2,6 +2,7 @@ package net.cytonic.cynturion;
 
 import com.google.common.collect.Iterables;
 import com.google.inject.Inject;
+import com.velocitypowered.api.command.CommandManager;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.LoginEvent;
@@ -59,6 +60,9 @@ public class Cynturion {
         rabbitmq.consumeServerDeclareMessages();
         rabbitmq.consumeServerShutdownMessages();
         rabbitmq.consumePlayerKickMessages();
+        CommandManager cm = proxyServer.getCommandManager();
+        cm.register(cm.metaBuilder("proxypoddetails").aliases("proxypod").build(), new PoddetailsCommand());
+        proxyServer.getCommandManager().unregister("server");
     }
 
     /**
@@ -89,6 +93,7 @@ public class Cynturion {
      */
     //todo: Make a dedicated list of fallbacks
     public void onKick(KickedFromServerEvent event) {
+        System.out.println("Kicked from server!!! (trying to rescue)");
         event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("Whoops! You were kicked from the server, but I rescued you! :)")));
     }
 
