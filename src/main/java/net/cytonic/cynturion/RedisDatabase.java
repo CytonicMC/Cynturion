@@ -6,6 +6,7 @@ import net.cytonic.cynturion.data.obj.CytonicServer;
 import net.cytonic.cynturion.messaging.pubsub.*;
 import redis.clients.jedis.*;
 import java.net.InetSocketAddress;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -57,9 +58,9 @@ public class RedisDatabase extends JedisPubSub {
         this.jedis = new JedisPooled(hostAndPort, config);
         this.jedisPub = new JedisPooled(hostAndPort, config);
         this.jedisSub = new JedisPooled(hostAndPort, config);
-        
-        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL));
-        worker.submit(() -> jedisSub.subscribe(new PlayerSend(plugin, this), PLAYER_SEND_CHANNEL));
+        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL, PLAYER_SEND_CHANNEL));
+//        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL));
+//        worker.submit(() -> jedisSub.subscribe(new PlayerSend(plugin, this), PLAYER_SEND_CHANNEL));
     }
 
     /**
@@ -132,6 +133,45 @@ public class RedisDatabase extends JedisPubSub {
      */
     public void shutdown() {
         jedis.close();
+    }
+
+
+    @Override
+    public void onMessage(String channel, String message) {
+        System.out.println("Channel: " + channel + " Message: " + message);
+        try {
+            if (channel.equals(RedisDatabase.PLAYER_SEND_CHANNEL)) {
+                // formatting: <PLAYER_UUID>|:|<SERVER_ID>
+                String[] parts = message.split("\\|:\\|");
+                UUID uuid = UUID.fromString(parts[0]);
+                String serverId = parts[1];
+                if (plugin.getProxy().getPlayer(uuid).isPresent()) {
+                    Player player = plugin.getProxy().getPlayer(uuid).get();
+                    if (plugin.getProxy().getServer(serverId).isPresent()) {
+                        player.createConnectionRequest(plugin.getProxy().getServer(serverId).get()).connect();
+                    }
+                }
+            } else if (channel.equals(RedisDatabase.SERVER_STATUS_CHANNEL)) {
+                System.out.println("Server status message: " + message);
+                // formatting: <START/STOP>|:|<SERVER_ID>|:|<SERVER_IP>|:|<SERVER_PORT>
+                String[] parts = message.split("\\|:\\|");
+                String name = parts[1];
+                String ip = parts[2];
+                int port = Integer.parseInt(parts[3]);
+                ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, port));
+                if (parts[0].equalsIgnoreCase("START")) {
+                    System.out.println("Registering the server: " + name + " with the ip and port " + ip + ":" + port);
+                    plugin.getProxy().registerServer(info);
+                    this.addServer(info);
+                } else if (parts[0].equalsIgnoreCase("STOP")) {
+                    System.out.println("Unregistering the server: " + name + " with the ip and port " + ip + ":" + port);
+                    plugin.getProxy().unregisterServer(info);
+                    this.removeServer(info);
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Error " + e);
+        }
     }
 }
 
