@@ -59,7 +59,7 @@ public class RedisDatabase extends JedisPubSub {
         this.jedisPub = new JedisPooled(hostAndPort, config);
         this.jedisSub = new JedisPooled(hostAndPort, config);
         System.out.println("Connected to redis... Subscribin.");
-        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL, PLAYER_SEND_CHANNEL));
+        worker.submit(() -> jedisSub.subscribe(this, SERVER_STATUS_CHANNEL, PLAYER_SEND_CHANNEL));
 //        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL));
 //        worker.submit(() -> jedisSub.subscribe(new PlayerSend(plugin, this), PLAYER_SEND_CHANNEL));
     }
