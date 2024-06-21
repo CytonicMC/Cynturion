@@ -73,6 +73,7 @@ public class Cynturion {
     @Subscribe
     public void onPlayerJoin(LoginEvent event) {
         redis.sendLoginMessage(event.getPlayer());
+        proxyServer.getCommandManager().unregister("server");
     }
 
     /**
