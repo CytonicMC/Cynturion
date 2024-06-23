@@ -8,6 +8,7 @@ import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.LoginEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
+import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
@@ -95,6 +96,20 @@ public class Cynturion {
     public void onKick(KickedFromServerEvent event) {
         System.out.println("Kicked from server!!! (trying to rescue)");
         event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("Whoops! You were kicked from the server, but I rescued you! :)")));
+    }
+
+    /**
+     * Subscribes to the ServerConnectedEvent and sends a server change message to Redis using the player's information.
+     *
+     * @param event the ServerConnectedEvent triggered when a player changes servers
+     */
+    @Subscribe
+    public void onServerChange(ServerConnectedEvent event) {
+        logger.info("hey this was called!");
+        String oldServerName = "null";
+        if (event.getPreviousServer().isPresent()) oldServerName = event.getPreviousServer().get().getServerInfo().getName();
+        redis.sendPlayerChangeServerMessage(event.getPlayer(), oldServerName, event.getServer().getServerInfo().getName());
+        logger.info("{} changed servers from {} to {}", event.getPlayer().getUsername(), oldServerName, event.getServer().getServerInfo().getName());
     }
 
     /**
