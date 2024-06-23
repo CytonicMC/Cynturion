@@ -3,7 +3,6 @@ package net.cytonic.cynturion;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import net.cytonic.cynturion.data.obj.CytonicServer;
-import net.cytonic.cynturion.messaging.pubsub.*;
 import redis.clients.jedis.*;
 import java.net.InetSocketAddress;
 import java.util.UUID;
@@ -21,10 +20,17 @@ public class RedisDatabase extends JedisPubSub {
      */
     public static final String ONLINE_PLAYER_UUID_KEY = "online_player_uuids";
     /**
+     * Cached player servers
+     */
+    public static final String ONLINE_PLAYER_SERVER_KEY = "online_player_server";
+    /**
      * Cached Servers
      */
     public static final String ONLINE_SERVER_KEY = "online_servers";
-
+    /**
+     * Player change servers channel
+     */
+    public static final String PLAYER_SERVER_CHANGE_CHANNEL = "player_server_change";
     /**
      * Player login/out channel
      */
@@ -37,8 +43,7 @@ public class RedisDatabase extends JedisPubSub {
      * Player send channel
      */
     public static final String PLAYER_SEND_CHANNEL = "player_send";
-    
-    
+
     private final ExecutorService worker = Executors.newCachedThreadPool();
     // cache client
     private final JedisPooled jedis;
@@ -88,8 +93,17 @@ public class RedisDatabase extends JedisPubSub {
         jedis.srem(ONLINE_PLAYER_UUID_KEY, player.getUniqueId().toString());
     }
 
+    public void sendPlayerChangeServerMessage(Player player, String oldServerName, String newServerName) {
+        //<PLAYER_NAME>|:|<PLAYER_UUID>|:|<OLD_SERVER_NAME>|:|<NEW_SERVER_NAME>
+        jedisPub.publish(PLAYER_SERVER_CHANGE_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|" + oldServerName + "|:|" + newServerName);
+        jedis.srem(ONLINE_PLAYER_SERVER_KEY, player.getUsername() + "|:|" + player.getUniqueId() + "|:|" + oldServerName);
+        jedis.sadd(ONLINE_PLAYER_SERVER_KEY, player.getUsername() + "|:|" + player.getUniqueId() + "|:|" + newServerName);
+        System.out.println("all done!");
+    }
+
     /**
      * Sends a fake message pretending to be the server that stopped, since it stopped responding.
+     *
      * @param info the server to remove
      */
     public void sendUnregisterServerMessage(ServerInfo info) {
@@ -113,7 +127,7 @@ public class RedisDatabase extends JedisPubSub {
      * Adds a server to the Redis database by constructing a server data string and adding it to the ONLINE_SERVER_KEY set.
      *
      * @param info the ServerInfo object representing the server to be added
-     * **/
+     **/
     public void addServer(ServerInfo info) {
         jedis.sadd(ONLINE_SERVER_KEY, new CytonicServer(info.getAddress().getAddress().getHostAddress(), info.getName(), info.getAddress().getPort()).serialize());
     }
