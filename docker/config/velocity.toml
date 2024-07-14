@@ -17,7 +17,7 @@ try = []
 [advanced]
 compression-threshold = 256
 compression-level = -1
-login-ratelimit = 500
+login-ratelimit = 1
 connection-timeout = 5000
 read-timeout = 30000
 haproxy-protocol = false
