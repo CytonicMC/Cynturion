@@ -2,8 +2,9 @@ package net.cytonic.cynturion;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
-import net.cytonic.cynturion.data.obj.CytonicServer;
+import net.cytonic.objects.CytonicServer;
 import redis.clients.jedis.*;
+
 import java.net.InetSocketAddress;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -95,10 +96,9 @@ public class RedisDatabase extends JedisPubSub {
 
     public void sendPlayerChangeServerMessage(Player player, String oldServerName, String newServerName) {
         //<PLAYER_NAME>|:|<PLAYER_UUID>|:|<OLD_SERVER_NAME>|:|<NEW_SERVER_NAME>
-        jedisPub.publish(PLAYER_SERVER_CHANGE_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|" + oldServerName + "|:|" + newServerName);
-        jedis.srem(ONLINE_PLAYER_SERVER_KEY, player.getUsername() + "|:|" + player.getUniqueId() + "|:|" + oldServerName);
-        jedis.sadd(ONLINE_PLAYER_SERVER_KEY, player.getUsername() + "|:|" + player.getUniqueId() + "|:|" + newServerName);
-        System.out.println("all done!");
+        jedisPub.publish(PLAYER_SERVER_CHANGE_CHANNEL, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|\{oldServerName}|:|\{newServerName}");
+        jedis.srem(ONLINE_PLAYER_SERVER_KEY, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|\{oldServerName}");
+        jedis.sadd(ONLINE_PLAYER_SERVER_KEY, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|\{newServerName}");
     }
 
     /**
@@ -108,7 +108,7 @@ public class RedisDatabase extends JedisPubSub {
      */
     public void sendUnregisterServerMessage(ServerInfo info) {
         // formatting: <START/STOP>|:|<SERVER_ID>|:|<SERVER_IP>|:|<SERVER_PORT>
-        jedisPub.publish(SERVER_STATUS_CHANNEL, "STOP|:|" + info.getName() + "|:|" + info.getAddress().getAddress().getHostAddress() + "|:|" + info.getAddress().getPort());
+        jedisPub.publish(SERVER_STATUS_CHANNEL, STR."STOP|:|\{info.getName()}|:|\{info.getAddress().getAddress().getHostAddress()}|:|\{info.getAddress().getPort()}");
     }
 
     /**
