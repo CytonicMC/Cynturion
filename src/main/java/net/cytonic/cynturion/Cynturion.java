@@ -16,11 +16,14 @@ import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.PingOptions;
+import net.cytonic.cynturion.commands.PoddetailsCommand;
+import net.cytonic.cynturion.data.CytonicDatabase;
+import net.cytonic.cynturion.permissions.PermissionManager;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
-import java.util.Collections;
 
 @Plugin(
         id = "cynturion",
@@ -38,6 +41,9 @@ public class Cynturion {
     private ProxyServer proxyServer;
     private RedisDatabase redis;
     private RabbitMQMessager rabbitmq;
+    private CytonicDatabase database;
+    private RankManager rankManager;
+    private PermissionManager permissionManager;
 
     @Inject
     public Cynturion(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
@@ -62,8 +68,12 @@ public class Cynturion {
         rabbitmq.consumeServerShutdownMessages();
         rabbitmq.consumePlayerKickMessages();
         CommandManager cm = proxyServer.getCommandManager();
-        cm.register(cm.metaBuilder("proxypoddetails").aliases("proxypod").build(), new PoddetailsCommand());
+        cm.register(cm.metaBuilder("proxypoddetails").aliases("proxypod").build(), new PoddetailsCommand(this));
         proxyServer.getCommandManager().unregister("server");
+        database = new CytonicDatabase(this);
+        database.connect();
+        rankManager = new RankManager(this);
+        permissionManager = new PermissionManager(this);
     }
 
     /**
@@ -93,9 +103,9 @@ public class Cynturion {
      * @param event the KickedFromServerEvent triggered when a player is kicked from the server
      */
     //todo: Make a dedicated list of fallbacks
+    @Subscribe
     public void onKick(KickedFromServerEvent event) {
-        System.out.println("Kicked from server!!! (trying to rescue)");
-        event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("Whoops! You were kicked from the server, but I rescued you! :)")));
+        event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("Whoops! You were kicked from the server, but I rescued you! :)", NamedTextColor.RED)));
     }
 
     /**
@@ -105,7 +115,6 @@ public class Cynturion {
      */
     @Subscribe
     public void onServerChange(ServerConnectedEvent event) {
-        logger.info("hey this was called!");
         String oldServerName = "null";
         if (event.getPreviousServer().isPresent()) oldServerName = event.getPreviousServer().get().getServerInfo().getName();
         redis.sendPlayerChangeServerMessage(event.getPlayer(), oldServerName, event.getServer().getServerInfo().getName());
@@ -143,6 +152,20 @@ public class Cynturion {
             });
     }
 
+    @Subscribe
+    public void onProxyShutdown(ProxyShutdownEvent event) {
+        redis.shutdown();
+        rabbitmq.shutdown();
+        database.disconnect();
+    }
+
+    @Subscribe
+    public void preConnect(LoginEvent event) {
+        // load the player's rank as soon as possible
+        rankManager.loadRank(event.getPlayer().getUniqueId());
+        // todo: Check ban status too
+    }
+
     /**
      * Returns the proxy server.
      *
@@ -160,9 +183,15 @@ public class Cynturion {
         return rabbitmq;
     }
 
-    @Subscribe
-    public void onShutdown(ProxyShutdownEvent event) {
-        redis.shutdown();
-        rabbitmq.shutdown();
+    public CytonicDatabase getDatabase() {
+        return database;
+    }
+
+    public RankManager getRankManager() {
+        return rankManager;
+    }
+
+    public PermissionManager getPermissionManager() {
+        return permissionManager;
     }
 }

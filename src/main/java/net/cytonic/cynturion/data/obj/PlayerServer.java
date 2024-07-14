@@ -1,5 +1,7 @@
 package net.cytonic.cynturion.data.obj;
 
+import net.cytonic.objects.CytonicServer;
+
 import java.util.UUID;
 
 public record PlayerServer(UUID uuid, CytonicServer server) {
