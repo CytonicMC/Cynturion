@@ -105,7 +105,7 @@ public class Cynturion {
     //todo: Make a dedicated list of fallbacks
     @Subscribe
     public void onKick(KickedFromServerEvent event) {
-        event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("Whoops! You were kicked from the server, but I rescued you! :)", NamedTextColor.RED)));
+        event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("The server you were on went down, so you were sent to another server!", NamedTextColor.RED)));
     }
 
     /**
