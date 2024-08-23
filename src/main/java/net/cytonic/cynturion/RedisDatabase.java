@@ -2,15 +2,20 @@ package net.cytonic.cynturion;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
+import net.cytonic.cynturion.messaging.pubsub.PlayerKick;
+import net.cytonic.cynturion.messaging.pubsub.PlayerSend;
+import net.cytonic.cynturion.messaging.pubsub.ServerStatus;
 import net.cytonic.objects.CytonicServer;
-import redis.clients.jedis.*;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.JedisClientConfig;
+import redis.clients.jedis.JedisPooled;
 
 import java.net.InetSocketAddress;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class RedisDatabase extends JedisPubSub {
+public class RedisDatabase {
 
     /**
      * Cached player names
@@ -44,6 +49,10 @@ public class RedisDatabase extends JedisPubSub {
      * Player send channel
      */
     public static final String PLAYER_SEND_CHANNEL = "player_send";
+    /**
+     * Player kick
+     */
+    public static final String PLAYER_KICK = "player-kick";
 
     private final ExecutorService worker = Executors.newCachedThreadPool();
     // cache client
@@ -65,9 +74,9 @@ public class RedisDatabase extends JedisPubSub {
         this.jedisPub = new JedisPooled(hostAndPort, config);
         this.jedisSub = new JedisPooled(hostAndPort, config);
         System.out.println("Connected to redis... Subscribin.");
-        worker.submit(() -> jedisSub.subscribe(this, SERVER_STATUS_CHANNEL, PLAYER_SEND_CHANNEL));
-//        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL));
-//        worker.submit(() -> jedisSub.subscribe(new PlayerSend(plugin, this), PLAYER_SEND_CHANNEL));
+        worker.submit(() -> jedisSub.subscribe(new ServerStatus(plugin, this), SERVER_STATUS_CHANNEL));
+        worker.submit(() -> jedisSub.subscribe(new PlayerSend(plugin), PLAYER_SEND_CHANNEL));
+        worker.submit(() -> jedisSub.subscribe(new PlayerKick(plugin), PLAYER_KICK));
     }
 
     /**
@@ -77,7 +86,7 @@ public class RedisDatabase extends JedisPubSub {
      */
     public void sendLoginMessage(Player player) {
         // <PLAYER_NAME>|:|<PLAYER_UUID>|:|<JOIN/LEAVE>
-        jedisPub.publish(PLAYER_STATUS_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|JOIN");
+        jedisPub.publish(PLAYER_STATUS_CHANNEL, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|JOIN");
         jedis.sadd(ONLINE_PLAYER_NAME_KEY, player.getUsername());
         jedis.sadd(ONLINE_PLAYER_UUID_KEY, player.getUniqueId().toString());
     }
@@ -89,7 +98,7 @@ public class RedisDatabase extends JedisPubSub {
      */
     public void sendLogoutMessage(Player player) {
         // <PLAYER_NAME>|:|<PLAYER_UUID>|:|<JOIN/LEAVE>
-        jedisPub.publish(PLAYER_STATUS_CHANNEL, player.getUsername() + "|:|" + player.getUniqueId() + "|:|LEAVE");
+        jedisPub.publish(PLAYER_STATUS_CHANNEL, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|LEAVE");
         jedis.srem(ONLINE_PLAYER_NAME_KEY, player.getUsername());
         jedis.srem(ONLINE_PLAYER_UUID_KEY, player.getUniqueId().toString());
     }
@@ -118,7 +127,7 @@ public class RedisDatabase extends JedisPubSub {
     public void loadServers() {
         worker.submit(() -> jedis.smembers(ONLINE_SERVER_KEY).forEach(s -> {
             CytonicServer server = CytonicServer.deserialize(s);
-            System.out.println("Registering the server: " + server.id() + " with the ip and port " + server.ip() + ":" + server.port());
+            System.out.println(STR."Registering the server: \{server.id()} with the ip and port \{server.ip()}:\{server.port()}");
             plugin.getProxy().registerServer(new ServerInfo(server.id(), new InetSocketAddress(server.ip(), server.port())));
         }));
     }
@@ -142,6 +151,15 @@ public class RedisDatabase extends JedisPubSub {
     }
 
     /**
+     * Sends a message in Redis that a server has timed out.
+     */
+    public void sendServerTimeoutMessage(ServerInfo info) {
+        // formatting: {server-name}|:|{server-ip}|:|{server-port}
+        String message = STR."\{info.getName()}|:|\{info.getAddress().getAddress().getHostAddress()}|:|\{info.getAddress().getPort()}";
+        jedisPub.publish(SERVER_STATUS_CHANNEL, message);
+    }
+
+    /**
      * Closes the connection to the Redis database.
      * <p>
      * This method is used to gracefully shut down the connection to the Redis database by calling the `close()` method on the `jedis` object.
@@ -149,44 +167,4 @@ public class RedisDatabase extends JedisPubSub {
     public void shutdown() {
         jedis.close();
     }
-
-
-    @Override
-    public void onMessage(String channel, String message) {
-        System.out.println("Channel: " + channel + " Message: " + message);
-        try {
-            if (channel.equals(RedisDatabase.PLAYER_SEND_CHANNEL)) {
-                // formatting: <PLAYER_UUID>|:|<SERVER_ID>
-                String[] parts = message.split("\\|:\\|");
-                UUID uuid = UUID.fromString(parts[0]);
-                String serverId = parts[1];
-                if (plugin.getProxy().getPlayer(uuid).isPresent()) {
-                    Player player = plugin.getProxy().getPlayer(uuid).get();
-                    if (plugin.getProxy().getServer(serverId).isPresent()) {
-                        player.createConnectionRequest(plugin.getProxy().getServer(serverId).get()).connect();
-                    }
-                }
-            } else if (channel.equals(RedisDatabase.SERVER_STATUS_CHANNEL)) {
-                System.out.println("Server status message: " + message);
-                // formatting: <START/STOP>|:|<SERVER_ID>|:|<SERVER_IP>|:|<SERVER_PORT>
-                String[] parts = message.split("\\|:\\|");
-                String name = parts[1];
-                String ip = parts[2];
-                int port = Integer.parseInt(parts[3]);
-                ServerInfo info = new ServerInfo(name, new InetSocketAddress(ip, port));
-                if (parts[0].equalsIgnoreCase("START")) {
-                    System.out.println("Registering the server: " + name + " with the ip and port " + ip + ":" + port);
-                    plugin.getProxy().registerServer(info);
-                    this.addServer(info);
-                } else if (parts[0].equalsIgnoreCase("STOP")) {
-                    System.out.println("Unregistering the server: " + name + " with the ip and port " + ip + ":" + port);
-                    plugin.getProxy().unregisterServer(info);
-                    this.removeServer(info);
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("Error " + e);
-        }
-    }
 }
-

@@ -4,16 +4,15 @@ import com.velocitypowered.api.proxy.Player;
 import net.cytonic.cynturion.Cynturion;
 import net.cytonic.cynturion.RedisDatabase;
 import redis.clients.jedis.JedisPubSub;
+
 import java.util.UUID;
 
 public class PlayerSend extends JedisPubSub {
 
     private final Cynturion plugin;
-    private final RedisDatabase redis;
 
-    public PlayerSend(Cynturion plugin, RedisDatabase redis) {
+    public PlayerSend(Cynturion plugin) {
         this.plugin = plugin;
-        this.redis = redis;
     }
 
     @Override
@@ -32,7 +31,7 @@ public class PlayerSend extends JedisPubSub {
                 }
             }
         } catch (Exception e) {
-            System.out.println("Error " + e);
+            System.out.println(STR."Error \{e}");
         }
     }
 }
