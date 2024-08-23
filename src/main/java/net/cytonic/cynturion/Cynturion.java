@@ -64,9 +64,6 @@ public class Cynturion {
         redis.loadServers();
         rabbitmq.initializeConnection();
         rabbitmq.initializeQueues();
-        rabbitmq.consumeServerDeclareMessages();
-        rabbitmq.consumeServerShutdownMessages();
-        rabbitmq.consumePlayerKickMessages();
         CommandManager cm = proxyServer.getCommandManager();
         cm.register(cm.metaBuilder("proxypoddetails").aliases("proxypod").build(), new PoddetailsCommand(this));
         proxyServer.getCommandManager().unregister("server");
@@ -133,23 +130,23 @@ public class Cynturion {
 
     @Subscribe
     public void onServerConnect(ServerPreConnectEvent event) {
-            event.getOriginalServer().ping(PingOptions.DEFAULT).whenComplete((serverPing, throwable) -> {
-                if (throwable != null) {
-                    logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName());
-                    logger.warn("Unregistering server {}", event.getOriginalServer().getServerInfo().getName());
-                    getProxy().unregisterServer(event.getOriginalServer().getServerInfo());
-                    getRedis().removeServer(event.getOriginalServer().getServerInfo());
-                    getRedis().sendUnregisterServerMessage(event.getOriginalServer().getServerInfo());
-                    return;
-                }
+        event.getOriginalServer().ping(PingOptions.DEFAULT).whenComplete((serverPing, throwable) -> {
+            if (throwable != null) {
+                logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName());
+                logger.warn("Unregistering server {}", event.getOriginalServer().getServerInfo().getName());
+                getProxy().unregisterServer(event.getOriginalServer().getServerInfo());
+                getRedis().removeServer(event.getOriginalServer().getServerInfo());
+                getRedis().sendUnregisterServerMessage(event.getOriginalServer().getServerInfo());
+                return;
+            }
 
-                if (serverPing == null) {
-                    logger.info("Server {} is not online, unregistering", event.getOriginalServer().getServerInfo().getName());
-                    proxyServer.unregisterServer(event.getOriginalServer().getServerInfo());
-                    rabbitmq.sendServerTimeoutMessage(event.getOriginalServer().getServerInfo());
-                    redis.removeServer(event.getOriginalServer().getServerInfo());
-                }
-            });
+            if (serverPing == null) {
+                logger.info("Server {} is not online, unregistering", event.getOriginalServer().getServerInfo().getName());
+                proxyServer.unregisterServer(event.getOriginalServer().getServerInfo());
+                redis.sendServerTimeoutMessage(event.getOriginalServer().getServerInfo());
+                redis.removeServer(event.getOriginalServer().getServerInfo());
+            }
+        });
     }
 
     @Subscribe
