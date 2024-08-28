@@ -3,6 +3,7 @@ package net.cytonic.cynturion;
 import com.google.common.collect.Iterables;
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandManager;
+import com.velocitypowered.api.event.ResultedEvent;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.LoginEvent;
@@ -14,16 +15,20 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
+import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.PingOptions;
 import net.cytonic.cynturion.commands.PoddetailsCommand;
 import net.cytonic.cynturion.data.CytonicDatabase;
 import net.cytonic.cynturion.permissions.PermissionManager;
+import net.cytonic.utils.MessageUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
+
+import static net.cytonic.utils.MiniMessageTemplate.MM;
 
 @Plugin(
         id = "cynturion",
@@ -113,7 +118,8 @@ public class Cynturion {
     @Subscribe
     public void onServerChange(ServerConnectedEvent event) {
         String oldServerName = "null";
-        if (event.getPreviousServer().isPresent()) oldServerName = event.getPreviousServer().get().getServerInfo().getName();
+        if (event.getPreviousServer().isPresent())
+            oldServerName = event.getPreviousServer().get().getServerInfo().getName();
         redis.sendPlayerChangeServerMessage(event.getPlayer(), oldServerName, event.getServer().getServerInfo().getName());
         logger.info("{} changed servers from {} to {}", event.getPlayer().getUsername(), oldServerName, event.getServer().getServerInfo().getName());
     }
@@ -158,9 +164,20 @@ public class Cynturion {
 
     @Subscribe
     public void preConnect(LoginEvent event) {
-        // load the player's rank as soon as possible
-        rankManager.loadRank(event.getPlayer().getUniqueId());
-        // todo: Check ban status too
+        Player player = event.getPlayer();
+        database.isBanned(player.getUniqueId()).whenComplete((data, throwable) -> {
+            if (throwable != null) {
+                logger.error("Failed to check if player {} is banned", player.getUniqueId());
+                event.setResult(ResultedEvent.ComponentResult.denied(MM."<red>Unable to check if you are banned!"));
+                return;
+            }
+            if (data.isBanned()) {
+                event.setResult(ResultedEvent.ComponentResult.denied(MessageUtils.formatBanMessage(data)));
+                return;
+            }
+            // load the player's rank as soon as possible
+            rankManager.loadRank(event.getPlayer().getUniqueId());
+        });
     }
 
     /**
