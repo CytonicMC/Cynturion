@@ -1,10 +1,10 @@
 package net.cytonic.cynturion.data;
 
 import com.google.inject.Inject;
+import net.cytonic.auditlog.Category;
+import net.cytonic.auditlog.Entry;
 import net.cytonic.cynturion.Cynturion;
 import net.cytonic.cynturion.CynturionSettings;
-import net.cytonic.cynturion.auditlog.Category;
-import net.cytonic.cynturion.auditlog.Entry;
 import net.cytonic.enums.PlayerRank;
 import net.cytonic.objects.BanData;
 import org.jetbrains.annotations.NotNull;

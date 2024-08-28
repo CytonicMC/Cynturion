@@ -21,7 +21,7 @@ import com.velocitypowered.api.proxy.server.PingOptions;
 import net.cytonic.cynturion.commands.PoddetailsCommand;
 import net.cytonic.cynturion.data.CytonicDatabase;
 import net.cytonic.cynturion.permissions.PermissionManager;
-import net.cytonic.cynturion.utils.MessageUtils;
+import net.cytonic.utils.MessageUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.slf4j.Logger;
