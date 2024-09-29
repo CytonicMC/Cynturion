@@ -1,6 +1,5 @@
 package net.cytonic.cynturion;
 
-import com.google.common.collect.Iterables;
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandManager;
 import com.velocitypowered.api.event.ResultedEvent;
@@ -18,7 +17,9 @@ import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.PingOptions;
+import com.velocitypowered.api.proxy.server.RegisteredServer;
 import net.cytonic.cynturion.commands.PoddetailsCommand;
+import net.cytonic.cynturion.commands.ProcessPurchase;
 import net.cytonic.cynturion.data.CytonicDatabase;
 import net.cytonic.cynturion.permissions.PermissionManager;
 import net.cytonic.utils.MessageUtils;
@@ -49,6 +50,7 @@ public class Cynturion {
     private CytonicDatabase database;
     private RankManager rankManager;
     private PermissionManager permissionManager;
+    private ServerGroupingManager serverGroupingManager;
 
     @Inject
     public Cynturion(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
@@ -71,11 +73,13 @@ public class Cynturion {
         rabbitmq.initializeQueues();
         CommandManager cm = proxyServer.getCommandManager();
         cm.register(cm.metaBuilder("proxypoddetails").aliases("proxypod").build(), new PoddetailsCommand(this));
+        cm.register(cm.metaBuilder("processpurchase").plugin(this).build(), new ProcessPurchase());
         proxyServer.getCommandManager().unregister("server");
         database = new CytonicDatabase(this);
         database.connect();
         rankManager = new RankManager(this);
         permissionManager = new PermissionManager(this);
+        serverGroupingManager = new ServerGroupingManager();
     }
 
     /**
@@ -107,7 +111,12 @@ public class Cynturion {
     //todo: Make a dedicated list of fallbacks
     @Subscribe
     public void onKick(KickedFromServerEvent event) {
-        event.setResult(KickedFromServerEvent.RedirectPlayer.create(Iterables.getFirst(proxyServer.getAllServers(), null), Component.text("Whoops! You were kicked from the server, but I rescued you! :)", NamedTextColor.RED)));
+        RegisteredServer fallback = serverGroupingManager.chooseFallback().orElse(null);
+        if (fallback == null) {
+            event.setResult(KickedFromServerEvent.DisconnectPlayer.create(MM."<red>Failed to rescue: ".append(event.getServerKickReason().orElse(MM."<dark_gray><No reason provided>"))));
+            return;
+        }
+        event.setResult(KickedFromServerEvent.RedirectPlayer.create(fallback, Component.text("Whoops! You were kicked from the server, but I rescued you! :)", NamedTextColor.RED)));
     }
 
     /**
@@ -131,7 +140,11 @@ public class Cynturion {
      */
     @Subscribe
     public void onPlayerChooseServer(PlayerChooseInitialServerEvent event) {
-        event.setInitialServer(Iterables.getFirst(proxyServer.getAllServers(), null));
+        RegisteredServer server = serverGroupingManager.chooseFallback().orElse(null);
+        if (server == null) {
+            logger.warn("No fallback server!");
+        }
+        event.setInitialServer(server);
     }
 
     @Subscribe
@@ -140,6 +153,7 @@ public class Cynturion {
             if (throwable != null) {
                 logger.error("Failed to ping server {}", event.getOriginalServer().getServerInfo().getName());
                 logger.warn("Unregistering server {}", event.getOriginalServer().getServerInfo().getName());
+                serverGroupingManager.removeServer(event.getOriginalServer().getServerInfo().getName(), null);
                 getProxy().unregisterServer(event.getOriginalServer().getServerInfo());
                 getRedis().removeServer(event.getOriginalServer().getServerInfo());
                 getRedis().sendUnregisterServerMessage(event.getOriginalServer().getServerInfo());
@@ -207,5 +221,13 @@ public class Cynturion {
 
     public PermissionManager getPermissionManager() {
         return permissionManager;
+    }
+
+    public ServerGroupingManager getServerGroupingManager() {
+        return serverGroupingManager;
+    }
+
+    public Logger getLogger() {
+        return logger;
     }
 }
