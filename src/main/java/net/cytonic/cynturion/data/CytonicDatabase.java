@@ -161,7 +161,7 @@ public class CytonicDatabase {
      */
     public CompletableFuture<BanData> isBanned(UUID uuid) {
         if (!isConnected()) throw new IllegalStateException("The database must be connected.");
-        CompletableFuture<BanData> future = new CompletableFuture<>();
+        CompletableFuture<BanData> future = new CompletableFuture<BanData>();
         worker.submit(() -> {
             try {
                 PreparedStatement ps = connection.prepareStatement("SELECT * FROM cytonic_bans WHERE uuid = ?");
