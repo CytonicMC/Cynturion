@@ -18,6 +18,7 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.PingOptions;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import lombok.Getter;
 import net.cytonic.cynturion.commands.PoddetailsCommand;
 import net.cytonic.cynturion.commands.ProcessPurchase;
 import net.cytonic.cynturion.data.CytonicDatabase;
@@ -35,10 +36,11 @@ import static net.cytonic.utils.MiniMessageTemplate.MM;
         id = "cynturion",
         name = "Cynturion",
         version = BuildConstants.VERSION,
-        authors = "Foxikle",
+        authors = {"Foxikle", "Webhead1104"},
         url = "https://cytonic.net",
         description = "The proxy plugin powering the synchronization of the backend servers."
 )
+@Getter
 public class Cynturion {
 
     @Inject
@@ -126,7 +128,7 @@ public class Cynturion {
      */
     @Subscribe
     public void onServerChange(ServerConnectedEvent event) {
-        String oldServerName = "null";
+        String oldServerName = "none";
         if (event.getPreviousServer().isPresent())
             oldServerName = event.getPreviousServer().get().getServerInfo().getName();
         redis.sendPlayerChangeServerMessage(event.getPlayer(), oldServerName, event.getServer().getServerInfo().getName());
@@ -201,33 +203,5 @@ public class Cynturion {
      */
     public ProxyServer getProxy() {
         return proxyServer;
-    }
-
-    public RedisDatabase getRedis() {
-        return redis;
-    }
-
-    public RabbitMQMessager getRabbitMQ() {
-        return rabbitmq;
-    }
-
-    public CytonicDatabase getDatabase() {
-        return database;
-    }
-
-    public RankManager getRankManager() {
-        return rankManager;
-    }
-
-    public PermissionManager getPermissionManager() {
-        return permissionManager;
-    }
-
-    public ServerGroupingManager getServerGroupingManager() {
-        return serverGroupingManager;
-    }
-
-    public Logger getLogger() {
-        return logger;
     }
 }

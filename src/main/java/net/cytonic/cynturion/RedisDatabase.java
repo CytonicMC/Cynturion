@@ -2,6 +2,8 @@ package net.cytonic.cynturion;
 
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.ServerInfo;
+import net.cytonic.containers.PlayerChangeServerContainer;
+import net.cytonic.containers.PlayerLoginLogoutContainer;
 import net.cytonic.cynturion.messaging.pubsub.PlayerKick;
 import net.cytonic.cynturion.messaging.pubsub.PlayerSend;
 import net.cytonic.cynturion.messaging.pubsub.ServerStatus;
@@ -85,8 +87,8 @@ public class RedisDatabase {
      * @param player the player who joined
      */
     public void sendLoginMessage(Player player) {
-        // <PLAYER_NAME>|:|<PLAYER_UUID>|:|<JOIN/LEAVE>
-        jedisPub.publish(PLAYER_STATUS_CHANNEL, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|JOIN");
+        PlayerLoginLogoutContainer container = new PlayerLoginLogoutContainer(player.getUsername(), player.getUniqueId(), PlayerLoginLogoutContainer.Type.LOGIN);
+        jedisPub.publish(PLAYER_STATUS_CHANNEL, container.toString());
         jedis.sadd(ONLINE_PLAYER_NAME_KEY, player.getUsername());
         jedis.sadd(ONLINE_PLAYER_UUID_KEY, player.getUniqueId().toString());
     }
@@ -97,17 +99,20 @@ public class RedisDatabase {
      * @param player The player who left
      */
     public void sendLogoutMessage(Player player) {
-        // <PLAYER_NAME>|:|<PLAYER_UUID>|:|<JOIN/LEAVE>
-        jedisPub.publish(PLAYER_STATUS_CHANNEL, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|LEAVE");
+        PlayerLoginLogoutContainer container = new PlayerLoginLogoutContainer(player.getUsername(), player.getUniqueId(), PlayerLoginLogoutContainer.Type.LOGOUT);
+        jedisPub.publish(PLAYER_STATUS_CHANNEL, container.toString());
         jedis.srem(ONLINE_PLAYER_NAME_KEY, player.getUsername());
         jedis.srem(ONLINE_PLAYER_UUID_KEY, player.getUniqueId().toString());
     }
 
     public void sendPlayerChangeServerMessage(Player player, String oldServerName, String newServerName) {
-        //<PLAYER_NAME>|:|<PLAYER_UUID>|:|<OLD_SERVER_NAME>|:|<NEW_SERVER_NAME>
-        jedisPub.publish(PLAYER_SERVER_CHANGE_CHANNEL, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|\{oldServerName}|:|\{newServerName}");
-        jedis.srem(ONLINE_PLAYER_SERVER_KEY, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|\{oldServerName}");
-        jedis.sadd(ONLINE_PLAYER_SERVER_KEY, STR."\{player.getUsername()}|:|\{player.getUniqueId()}|:|\{newServerName}");
+        PlayerChangeServerContainer oldContainer = new PlayerChangeServerContainer(player.getUniqueId(), oldServerName);
+        PlayerChangeServerContainer newContainer = new PlayerChangeServerContainer(player.getUniqueId(), newServerName);
+        jedisPub.publish(PLAYER_SERVER_CHANGE_CHANNEL, newContainer.toString());
+        if (!oldServerName.equals("none")) {
+            jedis.srem(ONLINE_PLAYER_SERVER_KEY, oldContainer.toString());
+        }
+        jedis.sadd(ONLINE_PLAYER_SERVER_KEY, newContainer.toString());
     }
 
     /**
@@ -122,7 +127,6 @@ public class RedisDatabase {
 
     /**
      * Loads the servers from the SERVER_STATUS_CHANNEL and registers them with the proxy server.
-     * The servers are expected to be in the format "{server-name}|:|{server-ip}|:|{server-port}".
      */
     public void loadServers() {
         worker.submit(() -> jedis.smembers(ONLINE_SERVER_KEY).forEach(s -> {
